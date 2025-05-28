@@ -1,7 +1,7 @@
 import os, json, random, tempfile
 from jinja2 import Template
 from tenacity import retry, stop_after_attempt, wait_fixed
-from suno_client import Suno
+from suno import Suno
 from pick_keyword import generate_keyword
 from dk_upload import upload
 
