@@ -1,0 +1,44 @@
+name: Daily Music Release
+
+on:
+  schedule:
+    # 毎日 08:00 JST = 前日 23:00 UTC
+    - cron: "0 23 * * *"
+  workflow_dispatch:   # 手動実行もできるように追加
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SUNO_API_KEY:  ${{ secrets.SUNO_API_KEY }}
+      DK_EMAIL:      ${{ secrets.DK_EMAIL }}
+      DK_PASSWORD:   ${{ secrets.DK_PASSWORD }}
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+
+      - name: Generate & Upload Track
+        run: python windsurf/scripts/generate_upload.py
+
+      - name: Slack Success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ tomatrick released!\"}" "$SLACK_WEBHOOK"
+
+      - name: Slack Failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ Release failed: $GITHUB_RUN_URL\"}" "$SLACK_WEBHOOK"
