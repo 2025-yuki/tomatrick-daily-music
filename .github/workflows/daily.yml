@@ -1,5 +1,8 @@
 name: Daily Music Release
 
+concurrency:
+  group: daily-music
+  cancel-in-progress: false
 on:
   schedule:
     # 毎日 08:00 JST = 前日 23:00 UTC
