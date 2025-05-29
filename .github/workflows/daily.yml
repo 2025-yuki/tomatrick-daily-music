@@ -3,45 +3,52 @@ name: Daily Music Release
 concurrency:
   group: daily-music
   cancel-in-progress: false
+
 on:
   schedule:
-    # 毎日 08:00 JST = 前日 23:00 UTC
-    - cron: "0 23 * * *"
+    # 毎日 09:00 JST = 前日 24:00 UTC
+    - cron: "0 0 * * *"
   workflow_dispatch:   # 手動実行もできるように追加
 
 jobs:
   run:
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      SUNO_API_KEY:  ${{ secrets.SUNO_API_KEY }}
-      DK_EMAIL:      ${{ secrets.DK_EMAIL }}
-      DK_PASSWORD:   ${{ secrets.DK_PASSWORD }}
-      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+      OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
+      SUNO_API_KEY:         ${{ secrets.SUNO_API_KEY }}
+      DK_EMAIL:             ${{ secrets.DK_EMAIL }}
+      DK_PASSWORD:          ${{ secrets.DK_PASSWORD }}
+      SLACK_WEBHOOK_TOMATRICK: ${{ secrets.SLACK_WEBHOOK_TOMATRICK }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           pip install -r requirements.txt
           playwright install chromium
 
-      - name: Generate & Upload Track
-        run: python windsurf/scripts/generate_upload.py
+      - name: Generate & Upload 10 Tracks
+        run: |
+          for i in {1..10}; do
+            python windsurf/scripts/generate_upload.py
+          done
 
-      - name: Slack Success
+      - name: Slack Success (tomatrick-music)
         if: success()
         run: |
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"✅ tomatrick released!\"}" "$SLACK_WEBHOOK"
+          curl -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\":\"✅ tomatrick-music: 10 tracks released successfully!\"}" \
+            "$SLACK_WEBHOOK_TOMATRICK"
 
-      - name: Slack Failure
+      - name: Slack Failure (tomatrick-music)
         if: failure()
         run: |
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{\"text\":\"❌ Release failed: $GITHUB_RUN_URL\"}" "$SLACK_WEBHOOK"
+          curl -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\":\"❌ tomatrick-music: Release failed. See $GITHUB_RUN_URL\"}" \
+            "$SLACK_WEBHOOK_TOMATRICK"
