@@ -6,50 +6,56 @@ concurrency:
 
 on:
   schedule:
-    # 毎日 08:00 JST = 前日 23:00 UTC
-    - cron: "0 23 * * *"
-  workflow_dispatch:
+    # 毎日 09:00 JST → 前日 00:00 UTC
+    - cron: "0 0 * * *"
+  workflow_dispatch:  # 手動実行も可能
 
 jobs:
   run:
     runs-on: ubuntu-latest
     env:
-      OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
-      SUNO_API_KEY:         ${{ secrets.SUNO_API_KEY }}
-      DK_EMAIL:             ${{ secrets.DK_EMAIL }}
-      DK_PASSWORD:          ${{ secrets.DK_PASSWORD }}
-      SLACK_WEBHOOK:        ${{ secrets.SLACK_WEBHOOK_TOMATRICK }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      SUNO_API_KEY:  ${{ secrets.SUNO_API_KEY }}
+      DK_EMAIL:      ${{ secrets.DK_EMAIL }}
+      DK_PASSWORD:   ${{ secrets.DK_PASSWORD }}
+      # tomatrick-music ワークスペース用 Webhook
+      SLACK_WEBHOOK: ${{ secrets.TOMATRICK_SLACK_WEBHOOK }}
+
     steps:
-      - name: Checkout repo
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           pip install -r requirements.txt
           playwright install chromium
 
       - name: Generate & Upload 10 Tracks
-+       continue-on-error: true
         run: |
           for i in {1..10}; do
-            python windsurf/scripts/generate_upload.py
+            echo "▶ Generating track #$i"
+            if python windsurf/scripts/generate_upload.py; then
+              echo "✅ Track #$i succeeded"
+            else
+              echo "⚠️ Track #$i failed, continuing..."
+            fi
           done
 
-      - name: Slack Success (tomatrick-music)
-        if: success()
+      - name: Notify Slack of Success
+        if: ${{ always() }}  # 全ループ後に必ず通知
         run: |
           curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\":\"✅ Daily Music Release: 10 tracks uploaded successfully!\"}" \
+            --data "{\"text\":\"✅ tomatrick-music: 10 daily tracks processed (some may have failed).\"}" \
             "$SLACK_WEBHOOK"
 
-      - name: Slack Failure (tomatrick-music)
+      - name: Notify Slack of Failure
         if: failure()
         run: |
           curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\":\"❌ Daily Music Release failed: $GITHUB_RUN_URL\"}" \
+            --data "{\"text\":\"❌ tomatrick-music: Workflow failed. Check logs: $GITHUB_RUN_URL\"}" \
             "$SLACK_WEBHOOK"
