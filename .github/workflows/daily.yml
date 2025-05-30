@@ -6,9 +6,8 @@ concurrency:
 
 on:
   schedule:
-    # 毎日 09:00 JST → 前日 00:00 UTC
-    - cron: "0 0 * * *"
-  workflow_dispatch:  # 手動実行も可能
+    - cron: "0 0 * * *"       # 毎日 09:00 JST
+  workflow_dispatch:
 
 jobs:
   run:
@@ -18,19 +17,16 @@ jobs:
       SUNO_API_KEY:  ${{ secrets.SUNO_API_KEY }}
       DK_EMAIL:      ${{ secrets.DK_EMAIL }}
       DK_PASSWORD:   ${{ secrets.DK_PASSWORD }}
-      # tomatrick-music ワークスペース用 Webhook
-      SLACK_WEBHOOK: ${{ secrets.TOMATRICK_SLACK_WEBHOOK }}
+      TOMATRICK_SLACK_WEBHOOK: ${{ secrets.TOMATRICK_SLACK_WEBHOOK }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           pip install -r requirements.txt
           playwright install chromium
@@ -42,20 +38,23 @@ jobs:
             if python windsurf/scripts/generate_upload.py; then
               echo "✅ Track #$i succeeded"
             else
-              echo "⚠️ Track #$i failed, continuing..."
+              echo "⚠️ Track #$i failed"
             fi
           done
 
-      - name: Notify Slack of Success
-        if: ${{ always() }}  # 全ループ後に必ず通知
+      - name: Debug Slack Webhook   # （必要に応じて確認用に入れてください）
+        run: echo ">> webhook='$TOMATRICK_SLACK_WEBHOOK'"
+
+      - name: Slack Success
+        if: ${{ always() }}
         run: |
           curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\":\"✅ tomatrick-music: 10 daily tracks processed (some may have failed).\"}" \
-            "$SLACK_WEBHOOK"
+            --data '{"text":"✅ tomatrick-music: 10 daily tracks processed."}' \
+            "$TOMATRICK_SLACK_WEBHOOK"
 
-      - name: Notify Slack of Failure
+      - name: Slack Failure
         if: failure()
         run: |
           curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\":\"❌ tomatrick-music: Workflow failed. Check logs: $GITHUB_RUN_URL\"}" \
-            "$SLACK_WEBHOOK"
+            --data '{"text":"❌ tomatrick-music: Workflow failed. See '"$GITHUB_RUN_URL"'"}' \
+            "$TOMATRICK_SLACK_WEBHOOK"
