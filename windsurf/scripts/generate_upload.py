@@ -6,12 +6,12 @@ import random
 import tempfile
 import requests
 from jinja2 import Template
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
 from pick_keyword import generate_keyword
 from dk_upload import upload
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(60))
-def main():
+def generate_track():
     # 1. キーワード生成
     keyword = generate_keyword()
 
@@ -46,6 +46,7 @@ def main():
 
     # 5. ファイルとしてダウンロード
     audio_resp = requests.get(audio_url, timeout=120)
+    audio_resp.raise_for_status()
     audio_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
     with open(audio_path, "wb") as f:
         f.write(audio_resp.content)
@@ -58,6 +59,19 @@ def main():
 
     # 8. DistroKid へアップロード
     upload(audio_path, cover_path, title, "Pop")
+
+
+def main():
+    try:
+        generate_track()
+        print("✅ Track generation succeeded")
+    except RetryError as re:
+        print(f"⚠️ Suno.ai generation failed after retries: {re}")
+    except requests.HTTPError as he:
+        print(f"⚠️ HTTP error during generation: {he}")
+    except Exception as e:
+        print(f"⚠️ Unexpected error in generate_upload.py: {e}")
+
 
 if __name__ == "__main__":
     main()
