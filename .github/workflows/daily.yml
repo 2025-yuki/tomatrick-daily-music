@@ -34,8 +34,8 @@ jobs:
           playwright install chromium
 
       - name: Generate & Upload 10 Tracks
++       continue-on-error: true
         run: |
-          # 「1日に10曲ずつ」をループで実行
           for i in {1..10}; do
             python windsurf/scripts/generate_upload.py
           done
