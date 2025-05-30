@@ -6,9 +6,9 @@ concurrency:
 
 on:
   schedule:
-    # 毎日 09:00 JST = 前日 24:00 UTC
-    - cron: "0 0 * * *"
-  workflow_dispatch:   # 手動実行もできるように追加
+    # 毎日 08:00 JST = 前日 23:00 UTC
+    - cron: "0 23 * * *"
+  workflow_dispatch:
 
 jobs:
   run:
@@ -18,7 +18,7 @@ jobs:
       SUNO_API_KEY:         ${{ secrets.SUNO_API_KEY }}
       DK_EMAIL:             ${{ secrets.DK_EMAIL }}
       DK_PASSWORD:          ${{ secrets.DK_PASSWORD }}
-      SLACK_WEBHOOK_TOMATRICK: ${{ secrets.SLACK_WEBHOOK_TOMATRICK }}
+      SLACK_WEBHOOK:        ${{ secrets.SLACK_WEBHOOK_TOMATRICK }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -28,13 +28,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           pip install -r requirements.txt
           playwright install chromium
 
       - name: Generate & Upload 10 Tracks
         run: |
+          # 「1日に10曲ずつ」をループで実行
           for i in {1..10}; do
             python windsurf/scripts/generate_upload.py
           done
@@ -43,12 +44,12 @@ jobs:
         if: success()
         run: |
           curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\":\"✅ tomatrick-music: 10 tracks released successfully!\"}" \
-            "$SLACK_WEBHOOK_TOMATRICK"
+            --data "{\"text\":\"✅ Daily Music Release: 10 tracks uploaded successfully!\"}" \
+            "$SLACK_WEBHOOK"
 
       - name: Slack Failure (tomatrick-music)
         if: failure()
         run: |
           curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\":\"❌ tomatrick-music: Release failed. See $GITHUB_RUN_URL\"}" \
-            "$SLACK_WEBHOOK_TOMATRICK"
+            --data "{\"text\":\"❌ Daily Music Release failed: $GITHUB_RUN_URL\"}" \
+            "$SLACK_WEBHOOK"
