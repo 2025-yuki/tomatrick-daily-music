@@ -5,13 +5,17 @@ import json
 import random
 import tempfile
 import requests
+import openai
 from jinja2 import Template
-from tenacity import retry, stop_after_attempt, wait_fixed, RetryError
+from tenacity import retry, stop_after_attempt, wait_fixed
 from pick_keyword import generate_keyword
 from dk_upload import upload
 
+# 環境変数から OpenAI API キーをセット
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(60))
-def generate_track():
+def main():
     # 1. キーワード生成
     keyword = generate_keyword()
 
@@ -23,7 +27,9 @@ def generate_track():
     ])
 
     # 3. プロンプトテンプレートを読み込み & レンダリング
-    tpl = Template(open("windsurf/prompts/suno_prompt.j2", encoding="utf-8").read())
+    tpl = Template(
+        open("windsurf/prompts/suno_prompt.j2", encoding="utf-8").read()
+    )
     prompt = tpl.render(genre=genre, keyword=keyword)
 
     # 4. Suno REST API を直接叩いて曲を生成
@@ -44,34 +50,36 @@ def generate_track():
     audio_url = data["audio_url"]
     lyrics = data.get("lyrics", "")
 
-    # 5. ファイルとしてダウンロード
+    # 5. ファイルとしてオーディオをダウンロード
+    audio_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
     audio_resp = requests.get(audio_url, timeout=120)
     audio_resp.raise_for_status()
-    audio_path = tempfile.NamedTemporaryFile(suffix=".wav", delete=False).name
     with open(audio_path, "wb") as f:
         f.write(audio_resp.content)
 
     # 6. 曲タイトルを決定
     title = f"{keyword} - tomatrick"
 
-    # 7. カバーアート一時ファイル（必要に応じてDALL·E等で生成）
+    # 7. カバーアート一時ファイル（DALL·E で生成）
     cover_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
 
+    # 7a. DALL·E に投げて画像 URL を取得
+    dalle_resp = openai.Image.create(
+        prompt=f"Album cover art for a {genre} song titled '{title}', vibrant, modern style",
+        n=1,
+        size="512x512"
+    )
+    image_url = dalle_resp["data"][0]["url"]
+
+    # 7b. 画像をダウンロードして保存
+    img_resp = requests.get(image_url, timeout=60)
+    img_resp.raise_for_status()
+    with open(cover_path, "wb") as f:
+        f.write(img_resp.content)
+
     # 8. DistroKid へアップロード
-    upload(audio_path, cover_path, title, "Pop")
-
-
-def main():
-    try:
-        generate_track()
-        print("✅ Track generation succeeded")
-    except RetryError as re:
-        print(f"⚠️ Suno.ai generation failed after retries: {re}")
-    except requests.HTTPError as he:
-        print(f"⚠️ HTTP error during generation: {he}")
-    except Exception as e:
-        print(f"⚠️ Unexpected error in generate_upload.py: {e}")
-
+    #    upload(<audio_file>, <cover_image>, <title>, <genre>)
+    upload(audio_path, cover_path, title, genre)
 
 if __name__ == "__main__":
     main()
